@@ -1,0 +1,346 @@
+---
+title: "Mueller_Rgr_2023"
+output: html_notebook
+---
+
+
+
+### Load libraries
+```{r, message=FALSE}
+  
+library(Seurat)
+library(tidyverse)
+library(cowplot)
+library(gridExtra)
+  
+```
+  
+### Load datasets
+```{r}
+  
+##########
+# Mouse scRNA
+seu.mouse.Campello <- readRDS("GSE230049_Campello_2023.rds")
+seu.mueller <- readRDS("../data/interim/seu.meuller.rds")
+
+##########
+# Human scRNA
+seu.human.Yan <- readRDS("GSE148077_Yan_2020.rds")
+fov_per <- ifelse(seu.human.Yan$Source == "Fovea", "Fovea", "Periphery")
+seu.human.Yan <- AddMetaData(seu.human.Yan, metadata = fov_per, col.name = "Location")
+
+##########
+# Macaque scRNA
+seu.macaque.Peng <- readRDS("GSE118546_Peng_2019.rds")
+  
+```
+  
+### Create directories
+```{r}
+  
+# expt_nm <- "RGR_Mueller_glia"
+dir_export <- file.path("~")
+  
+```
+  
+### Mouse Rgr positive Mueller glia cells
+```{r}
+  
+# Subset Mueller glia
+mueller_cells <- seu.mouse.Campello$CellType == "Mueller cell"
+
+# Calculate number of Rgr positive cells
+rgr_cells <- sum(GetAssayData(seu.mouse.Campello, 
+                              assay = "decontXcounts", 
+                              slot = "counts")["Rgr", mueller_cells]>0)
+
+##########
+# Percentage Rgr positive cells
+mm_rgr_percent <- rgr_cells / length(mueller_cells[mueller_cells == T])
+  
+```
+  
+### Human RGR positive Mueller glia cells
+```{r}
+  
+# Subset Mueller glia
+seu.human.Yan.mg <- subset(seu.human.Yan, subset = CellType == "Muller")
+
+# Set retina location information
+mg_loc <- table(seu.human.Yan.mg$Location)
+mg_fov <- seu.human.Yan.mg$Location == "Fovea"
+mg_per <- seu.human.Yan.mg$Location == "Periphery"
+
+# Calculate number of RGR positive cells
+rgr_cells_fov <- sum(GetAssayData(seu.human.Yan.mg, 
+                                  assay = "RNA", 
+                                  slot = "counts")["RGR", mg_fov]>0)
+rgr_cells_per <- sum(GetAssayData(seu.human.Yan.mg, 
+                                  assay = "RNA", 
+                                  slot = "counts")["RGR", mg_per]>0)
+
+##########
+# Percentage RGR positive cells
+rgr_percent_hs <- round(c(rgr_cells_fov, rgr_cells_per) / mg_loc * 100, digits = 1)
+  
+##########
+# Violin Plot of RGR expression in Mueller glia
+v <- VlnPlot(seu.human.Yan.mg, 
+             group.by = "Location", 
+             features = "RGR", 
+             assay = "RNA", 
+             slot = "counts",
+             pt.size = 0.01, ) +
+  labs(caption = paste0("RGR positive Mueller cells (%)\nFovea: ", 
+                        rgr_percent_hs["Fovea"], 
+                        "\nPeriphery: ", 
+                        rgr_percent_hs["Periphery"])) +
+  xlab(NULL)
+
+cowplot::ggsave2(plot = v, 
+                 filename = file.path(dir_export, "Human-Yan_MG_Vln_RGR_region.pdf"), 
+                 height = 6, width = 6)
+  
+```
+  
+### Macaque RGR positive Mueller glia cells
+```{r}
+  
+# Subset Mueller glia
+seu.macaque.Peng.mg <- subset(seu.macaque.Peng, subset = CellType == "MG")
+
+# Set retina location information
+mg_loc <- table(seu.macaque.Peng.mg$Subcluster)
+mg_fov <- seu.macaque.Peng.mg$Subcluster == "Fovea"
+mg_per <- seu.macaque.Peng.mg$Subcluster == "Periphery"
+
+# Calculate number of RGR positive cells
+rgr_cells_fov <- sum(GetAssayData(seu.macaque.Peng.mg, 
+                                  assay = "RNA", 
+                                  slot = "counts")["RGR", mg_fov]>0)
+rgr_cells_per <- sum(GetAssayData(seu.macaque.Peng.mg, 
+                                  assay = "RNA", 
+                                  slot = "counts")["RGR", mg_per]>0)
+
+##########
+# Percentage RGR positive cells
+rgr_percent_macaque <- round(c(rgr_cells_fov, rgr_cells_per) / mg_loc * 100, digits = 1)
+  
+##########
+# Violin Plot of RGR expression in Mueller glia
+v <- VlnPlot(seu.macaque.Peng.mg, 
+             group.by = "Subcluster", 
+             features = "RGR", 
+             assay = "RNA", 
+             slot = "counts",
+             pt.size = 0.01, ) +
+  labs(caption = paste0("RGR positive Mueller cells (%)\nFovea: ", 
+                        rgr_percent_macaque["Fovea"], 
+                        "\nPeriphery: ", 
+                        rgr_percent_macaque["Periphery"])) +
+  xlab(NULL)
+
+cowplot::ggsave2(plot = v, 
+                 filename = file.path(dir_export, "Macaque-Peng_MG_Vln_RGR_region.pdf"), 
+                 height = 6, width = 6)
+  
+```
+
+### Dotplots of visual cycle genes in Mouse, Human, and Macaque cell types
+```{r}
+
+# Visual cycle genes of interest
+gois <- c("RGR", "RLBP1", "LRAT", "DHRS3", "RPE65", "RDH5", "RDH8", "RDH10", "RDH11", "RDH12")
+
+
+####################
+# Mouse scRNA data
+####################
+
+# Set cell order for x-axis in plot
+seu.mouse.Campello$CellType <- factor(as.character(seu.mouse.Campello$CellType), levels = rev(as.character(Misc(seu.mouse.Campello, slot = "cell_order"))), ordered = T)
+
+##########
+# Make dotplot of expression for genes-of-interest
+d <- DotPlot(seu.mouse.Campello, 
+             group.by = "CellType", 
+             features = str_to_title(gois), 
+             assay = "decontXcounts") +
+  theme(axis.text.x = element_text(angle = 60, vjust = 0.95, hjust = 0.9)) +
+  labs(title = "Mouse") +
+  labs(x = NULL, y = NULL)
+
+cowplot::ggsave2(plot = d, 
+                 filename = file.path(dir_export, paste0("Mouse-Campello_Dot_gois.pdf")), 
+                 height = 4, width = 6)
+
+
+####################
+## Human scRNA data
+####################
+
+# Subset data via retina location for preparation of plotting
+seu.human.Yan$CellType <- factor(seu.human.Yan$CellType, levels = rev(levels(Idents(seu.human.Yan))))
+seu.human.fov <- subset(seu.human.Yan, subset = Location == "Fovea")
+seu.human.per <- subset(seu.human.Yan, subset = Location == "Periphery")
+
+##########
+# Make dotplot of expression for genes-of-interest in fovea and peripheral retina
+d1 <- DotPlot(seu.human.fov, 
+              group.by = "CellType", 
+              features = gois, 
+              scale = F) +
+  theme(axis.text.x = element_text(angle = 60, vjust = 0.95, hjust = 0.9)) +
+  labs(title = "Human", subtitle = "Fovea") +
+  labs(x = NULL, y = NULL)
+
+
+d2 <- DotPlot(seu.human.per, 
+              group.by = "CellType", 
+              features = gois, 
+              scale = F) +
+  theme(axis.text.x = element_text(angle = 60, vjust = 0.95, hjust = 0.9)) +
+  labs(subtitle = "Periphery") +
+  labs(x = NULL, y = NULL)
+
+g <- gridExtra::grid.arrange(grobs=list(d1, d2), ncol=1)
+
+cowplot::ggsave2(plot = g, 
+                 filename = file.path(dir_export, paste0("Human-Yan_Dot_gois.pdf")), 
+                 height = 8, width = 6)
+
+
+####################
+# Macaque scRNA data
+####################
+
+# Subset data via retina location for preparation of plotting
+cell_order_macaque <- levels(Idents(seu.macaque.Peng))[c(12,11,10,4,3,5,2,1,13,6,9,8,7)]
+seu.macaque.Peng$CellType <- factor(seu.macaque.Peng$CellType, levels = rev(cell_order_macaque))
+seu.macaque.fov <- subset(seu.macaque.Peng, subset = Subcluster == "Fovea")
+seu.macaque.per <- subset(seu.macaque.Peng, subset = Subcluster == "Periphery")
+
+##########
+# Make dotplot of expression for genes-of-interest in fovea and peripheral retina
+d1 <- DotPlot(seu.macaque.fov, 
+              group.by = "CellType", 
+              features = gois, 
+              scale = F) +
+  theme(axis.text.x = element_text(angle = 60, vjust = 0.95, hjust = 0.9)) +
+  labs(title = "Macaque", subtitle = "Fovea") +
+  labs(x = NULL, y = NULL)
+
+d2 <- DotPlot(seu.macaque.per, 
+              group.by = "CellType", 
+              features = gois, 
+              scale = F) +
+  theme(axis.text.x = element_text(angle = 60, vjust = 0.95, hjust = 0.9)) +
+  labs(subtitle = "Periphery") +
+  labs(x = NULL, y = NULL)
+
+g <- gridExtra::grid.arrange(grobs=list(d1, d2), ncol=1)
+
+cowplot::ggsave2(plot = g, 
+                 filename = file.path(dir_export, paste0("Macaque-Peng_Dot_gois.pdf")), 
+                 height = 8, width = 6)
+  
+```
+
+
+
+### Mouse Differential Gene Expression in Mueller glia cells, Rgr Pov vs Neg
+```{r}
+
+####################
+# Prep Seurat object for DGE
+####################
+
+# Subset Mueller cells
+seu.mueller <- subset(seu, idents = "Mueller cell")
+
+# Remove one outlier cell
+outlier <- "M24_whole_M24_whole_GGTGTCGTCTTACCAT-1"
+good_cells <- Cells(seu.mueller)[!(Cells(seu.mueller) %in% outlier)]
+seu.mueller <- subset(seu.mueller, cells = good_cells)
+
+# Add meta column indicating positive expression of Rgr using SCT threshold
+rgr_exp <- GetAssayData(seu.mueller, assay = "SCT", slot = "counts")["Rgr", ]>0
+rgr_exp <- ifelse(rgr_exp == T, "rgr_pos", "rgr_neg")
+seu.mueller <- AddMetaData(seu.mueller, rgr_exp, col.name = "rgr_exp_sct")
+
+
+####################
+# Perform DGE analysis
+####################
+
+# Parameters for DGE
+pct <- 0.1
+fc <- 1
+
+# Perform DGE
+seu.mueller <- SetIdent(seu.mueller, value = "rgr_exp_sct")
+seu.mueller <- PrepSCTFindMarkers(seu.mueller)
+rgr.de.sct <- FindMarkers(seu.mueller, 
+                          assay = "SCT", 
+                          slot = "data",
+                          ident.1 = "rgr_pos", 
+                          ident.2 = "rgr_neg",
+                          logfc.threshold = log(fc),
+                          recorrect_umi = F)
+
+# Filter for genes with better than 1% FDR
+rgr.de.sct <- rgr.de.sct %>% 
+  arrange(p_val_adj, desc(abs(avg_log2FC))) %>% 
+  filter(p_val_adj < 0.01)
+
+# Export results table
+write.table(rgr.de.sct, 
+            file = file.path(dir_export, paste0("DGE_Mouse_Rgr_posVneg_SCTclassif.tsv")), 
+            quote = F, sep = "\t")
+  
+```
+
+
+### Macaque Differential Gene Expression in Mueller glia cells, Rgr Pov vs Neg
+```{r}
+
+####################
+# Prep Seurat object for DGE
+####################
+
+# Add meta column indicating positive expression of Rgr
+rgr_exp <- GetAssayData(seu.macaque.Peng.mg, assay = "RNA", slot = "counts")["RGR", ]>0
+rgr_exp <- ifelse(rgr_exp == T, "rgr_pos", "rgr_neg")
+seu.macaque.Peng.mg <- AddMetaData(seu.macaque.Peng.mg, rgr_exp, col.name = "rgr_exp")
+
+
+####################
+# Perform DGE analysis
+####################
+
+# Parameters for DGE
+pct <- 0.1
+fc <- 1
+
+# Perform DGE
+seu.macaque.Peng.mg <- SetIdent(seu.macaque.Peng.mg, value = "rgr_exp")
+rgr.de.macaque <- FindMarkers(seu.macaque.Peng.mg, 
+                              assay = "RNA", 
+                              slot = "counts", 
+                              ident.1 = "rgr_pos", 
+                              ident.2 = "rgr_neg", 
+                              logfc.threshold = log(fc),
+                              recorrect_umi = F)
+
+# Filter for genes with better than 1% FDR
+rgr.de.macaque <- rgr.de.macaque %>% 
+  arrange(p_val_adj, desc(abs(avg_log2FC))) %>% 
+  filter(p_val_adj < 0.01)
+
+# Export results table
+write.table(rgr.de.macaque, 
+            file = file.path(dir_export, paste0("DGE_Macaque_Rgr_posVneg_mueller.tsv")), 
+            quote = F, sep = "\t", )
+  
+```
+
