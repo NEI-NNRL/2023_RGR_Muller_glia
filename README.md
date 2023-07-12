@@ -32,3 +32,5 @@ Mueller_RGR.Rmd is the R markdown file containing the code for used for generati
 
 
 Please contact Matthew Brooks (brooksma@nei.nih.gov) with any questions.
+
+[![DOI](https://zenodo.org/badge/629104054.svg)](https://zenodo.org/badge/latestdoi/629104054)
